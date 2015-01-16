@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 
     // do deconvolution
     cout << "Performing deconvolution" << endl;
-    ColumnVector mag;
+    ColumnVector mag; // Column Vector to save CBF of each voxel (taken as the largest value of each column of scaled residue matrix)
     Matrix resid;
     Deconv(asldata,aifmtx,opts.dt.value(),mag,resid);
 
@@ -148,9 +148,9 @@ int main(int argc, char *argv[])
 
       if (opts.batout.set()) {
 	//output the BAT image (from the tissue)
-	volume4D<float> batout;
-	batout.setmatrix(batt.AsMatrix(1,nvox),mask);
-	save_volume4D(batout,opts.outname.value()+"_bat");
+        volume4D<float> batout;
+        batout.setmatrix(batt.AsMatrix(1,nvox),mask);
+        save_volume4D(batout,opts.outname.value()+"_bat");
       }
     }
 
@@ -162,39 +162,37 @@ int main(int argc, char *argv[])
 
       if (opts.bata.set()) {
 	//calculate difference between tissue and AIF curves using suppled BAT images
-	volume4D<float> bat_art;
-	read_volume4D(bat_art,opts.bata.value());
-	
-	if (opts.batt.set()) {
+        volume4D<float> bat_art;
+        read_volume4D(bat_art,opts.bata.value());
+        if (opts.batt.set()) {
 	  //load supplied tissue BAT
-	volume4D<float> bat_tiss;
-	read_volume4D(bat_tiss,opts.batt.value());
-	
-	batt = (bat_tiss.matrix(mask)).AsColumn();
-	}
-	
-	if (opts.metric.set()) {
+          volume4D<float> bat_tiss;
+          read_volume4D(bat_tiss,opts.batt.value());
+          batt = (bat_tiss.matrix(mask)).AsColumn();
+        }
+
+        if (opts.metric.set()) {
 	  // correct the AIF bat image to match the AIFs where a metric image has been supplied
-	  Prepare_AIF(bat_art,metric,mask,opts.mthresh.value());
-	}
-	
-	ColumnVector bata;
-	bata = (bat_art.matrix(mask)).AsColumn();
-	
-	batd = batt-bata;
+          Prepare_AIF(bat_art,metric,mask,opts.mthresh.value());
+        }
+        ColumnVector bata;
+        bata = (bat_art.matrix(mask)).AsColumn();
+        batd = batt-bata;
       }
       else {
 	//otherwise estimate BAT difference using the peak in the residue function
 	//Estimate_BAT_difference(resid,batd,opts.dt.value());
 
 	// Estiamte BAT difference using edge detection
-	ColumnVector bata;
-	Estimate_onset(aifmtx,bata,opts.dt.value());
-
-	batd = batt-bata;
+        ColumnVector bata;
+        Estimate_onset(aifmtx,bata,opts.dt.value());
+        batd = batt-bata;
       }
 
-      for (int i=1; i<=batd.Nrows(); i++) { if (batd(i)<0.0) batd(i)=0.0; }
+      for (int i=1; i<=batd.Nrows(); i++) {
+        if (batd(i)<0.0)
+          batd(i)=0.0;
+      }
       Correct_magnitude(mag,batd,opts.T1.value(),opts.dt.value(),opts.fa.value());
     }
 
@@ -203,10 +201,9 @@ int main(int argc, char *argv[])
       cout << "Performing wild bootstrapping for precision estimation" << endl;
       ColumnVector magstd;
       BootStrap(aifmtx, asldata, opts.dt.value(), mag, resid, opts.nwb.value(), magstd);
-
       if (opts.tcorrect.set()) {
 	// if needed we should correct the std dev for timing discrpancies between aif and ctc
-	Correct_magnitude(magstd,batd,opts.T1.value(),opts.dt.value(),opts.fa.value());
+        Correct_magnitude(magstd,batd,opts.T1.value(),opts.dt.value(),opts.fa.value());
       }
 
       // save it

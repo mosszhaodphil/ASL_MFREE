@@ -161,11 +161,11 @@ namespace OXASL {
 
     // voxelwise SVD deconvolution
     Matrix aifconv; Matrix residue(nti+nextra,nvox);
-    ColumnVector resid(nti+nextra);
+    ColumnVector resid(nti+nextra);// Length (L) of vector must satisfy L >= 2N to avoid time aliasing
     DiagonalMatrix S; DiagonalMatrix D; Matrix U; Matrix V;
     for (int v=1; v<=nvox; v++) {
       //make convolution matrix
-      aifconv = dt * convmtx_circular(aif.Column(v) & padding);
+      aifconv = dt * convmtx_circular(aif.Column(v) & padding); // & operator is to stack matrix (columns) vertically
       //SVD
       SVD(aifconv,S,U,V);
       // invert the singular values
@@ -179,10 +179,10 @@ namespace OXASL {
       // start removing singular values one by one until we get the OI we want
       int i=nti+nextra;
       while (oi>oi_thresh & i>1) {
-	D(i,i) = 0;
-	resid = V*D*U.t()*(data.Column(v) & padding);
-	oi = 1/((nti+nextra)*resid.Maximum())* (resid.Rows(3,nti+nextra)-2*resid.Rows(2,nti+nextra-1)+resid.Rows(1,nti+nextra-2)).SumAbsoluteValue();
-	i--;
+        D(i,i) = 0;
+        resid = V*D*U.t()*(data.Column(v) & padding);
+        oi = 1/((nti+nextra)*resid.Maximum())* (resid.Rows(3,nti+nextra)-2*resid.Rows(2,nti+nextra-1)+resid.Rows(1,nti+nextra-2)).SumAbsoluteValue();
+        i--;
       }
 
       residue.Column(v) = resid;
@@ -192,6 +192,7 @@ namespace OXASL {
     return residue; 
   }
 
+  // Create matrix a block-circulant matrix (matrix C in Wu's paper)
   ReturnMatrix convmtx_circular(const ColumnVector& invec){
     // create a (simple) convolution matrix
 
@@ -290,31 +291,35 @@ namespace OXASL {
       // if metric is not above threshold then search for nearest voxel where it is satisfied
 	  //cout << "Voxel: " << x << " " << y << " " << z << ": " << metric(x,y,z) << endl;
 	  if ( mask(x,y,z)>0 ) {
-	  if (metric(x,y,z) < mthresh) {
-	bestdist = 1e12;
-	Matrix aifcand;
-	for (int sx=0; sx<=nx; sx++) { for (int sy=0;sy<=ny; sy++) { for (int sz=0; sz<=nz; sz++) {
+      if (metric(x,y,z) < mthresh) {
+        bestdist = 1e12;
+        Matrix aifcand; // candidate AIF
+        for (int sx=0; sx<=nx; sx++) {
+          for (int sy=0;sy<=ny; sy++) {
+            for (int sz=0; sz<=nz; sz++) {
 	      // cout << sx << " " << sy << " " << sz << endl;
-	      if ( (mask(x,y,z)>0) && (metric(sx,sy,sz) >= mthresh) ) {
-		dist = pow(sx-x,2.0) + pow(sy-y,2.0) + pow(sz-z,2.0); //strictly this is distance squared
+              if ( (mask(x,y,z)>0) && (metric(sx,sy,sz) >= mthresh) ) {
+                dist = pow(sx-x,2.0) + pow(sy-y,2.0) + pow(sz-z,2.0); //strictly this is distance squared
 		//cout << dist << endl;
-	    if (dist < bestdist) {
-	      aifcand = aif.voxelts(sx,sy,sz); 
+                if (dist < bestdist) {
+                  aifcand = aif.voxelts(sx,sy,sz); 
 	      //cout << "New cand: " << aifcand.t() << endl;
-	      bestdist=dist;
-	    }
-	    else if (dist == bestdist) {
-	      aifcand |= aif.voxelts(sx,sy,sz);
+                  bestdist=dist;
+                }
+                else if (dist == bestdist) {
+                  aifcand |= aif.voxelts(sx,sy,sz); // Concatinate matrix horizontally
 	      //cout << aifcand.t() << endl;
-	    }
-	  }
-	    } } }
+                }
+              }
+            }
+          }
+        }
 	//cout << "AIF: " << mean(aifcand,2).t() << endl;
-	    aif.setvoxelts(mean(aifcand,2),x,y,z);
-	  }
-	  }
-	} } }
+        aif.setvoxelts(mean(aifcand,2),x,y,z);
+      }
     }
+    } } }
+  }
 
   void Correct_magnitude(ColumnVector& mag, const ColumnVector& batd, const float T1, const float dt=0.0, const float fa=0.0) {
     //magnitude correction to take acocutn fop differences in BAT between aif and tissue
@@ -322,7 +327,7 @@ namespace OXASL {
     mag = SP(mag,exp( batd/T1 ));
     if (fa>0) {
       for (int v=1; v<=mag.Nrows(); v++) {
-	mag(v) *= 1/pow( cos(fa/180*M_PI),floor((batd(v)-1e-3)/dt) ); //the 1e-3 deals with the case where batd is a integer mul;tiple of dt
+        mag(v) *= 1/pow( cos(fa/180*M_PI),floor((batd(v)-1e-3)/dt) ); //the 1e-3 deals with the case where batd is a integer mul;tiple of dt
       }
     }
     cout << endl;
@@ -370,8 +375,10 @@ namespace OXASL {
       float gthresh = 0.2*dgrad.Maximum();
       int i=1; bool cont=true;
       while ((i<ntpts) & cont) {
-	if (dgrad(i)>gthresh) cont=false;
-	else i++;
+        if (dgrad(i)>gthresh)
+          cont=false;
+        else
+          i++;
 	       }
       //cout << i << " " ;
       bate.Row(v) = i*dt;
