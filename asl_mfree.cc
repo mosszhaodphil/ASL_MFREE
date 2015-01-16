@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
     read_volume(mask,opts.maskfile.value());
 
     Matrix asldata;
-    asldata = data.matrix(mask);
+    asldata = data.matrix(mask); // creates a 2D matrix of all voxels and their time series
     //data.setmatrix(asldata,mask);
     int nvox=asldata.Ncols();
     
